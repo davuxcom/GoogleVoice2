@@ -14,13 +14,16 @@ namespace Tests
         {
             Task.Run(async () =>
                 {
-                    var acct = new Account(File.ReadAllText(@"d:\gv_u.txt"), File.ReadAllText(@"d:\gv_p.txt"));
-                    await acct.Login();
-
-                    Assert.AreEqual(1, 1);
+                    try
+                    {
+                        var acct = new Account(File.ReadAllText(@"d:\gv_u.txt"), File.ReadAllText(@"d:\gv_p.txt"));
+                        await acct.Login();
+                    }
+                    catch(Exception ex)
+                    {
+                        Assert.Fail();
+                    }
                 }).Wait();
-
-
         }
     }
 }

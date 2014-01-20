@@ -14,6 +14,7 @@ namespace GoogleVoice2
         string _UserName;
         string _Password; // TODO: SecureString
         string _GVX;
+        string _RNR_SE;
         int _AppVersion;
 
         public Account(string UserName, string Password)
@@ -97,11 +98,29 @@ namespace GoogleVoice2
                 throw new GVLoginException("GVX is missing after redirect");
             }
 
-            var Page2 = await ret.Content.ReadAsStringAsync();
-            var m2 = Regex.Match(Page2, @"appVersion: (.\d*)", RegexOptions.Singleline);
+            var Page = await ret.Content.ReadAsStringAsync();
+            var m2 = Regex.Match(Page, @"appVersion: (.\d*)", RegexOptions.Singleline);
             if (m2.Success)
             {
                 _AppVersion = int.Parse(m2.Groups[1].Value);
+            }
+
+            // We're going to fetch the lite mobile page, and pull out an RNR_SE, so we can make calls
+            // the HTML5 calling interface is unsuitable for non-phone devices
+            http.DefaultRequestHeaders.Clear(); // Clear mobile browser.
+            ret = await http.GetAsync("https://www.google.com/voice/m");
+            Page = await ret.Content.ReadAsStringAsync();
+            Match rnr = Regex.Match(Page, "name=\"_rnr_se\" value=\"(.*?)\"");
+            if (rnr.Success)
+            {
+                // NOTE: we won't encode here, because Post'ing will encode it.
+                // but this value MUST be encoded before going out!
+                _RNR_SE = rnr.Groups[1].Value;
+            }
+
+            if (string.IsNullOrWhiteSpace(_GVX) || string.IsNullOrWhiteSpace(_RNR_SE))
+            {
+                throw new GVLoginException("Couldn't find login tokens.");
             }
         }
     }
