@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -141,6 +142,23 @@ namespace GoogleVoice2
             {
                 throw new GVLoginException("Couldn't find login tokens.");
             }
+        }
+
+        HttpContent _GetGVPostContent()
+        {
+            return new StringContent("{\"gvx\":\"" + _Info.GVX + "\"}");
+        }
+
+        public async Task PostLoginActivities()
+        {
+            var http = _GetClient();
+            var ret = await http.PostAsync("https://www.google.com/voice/m/x?m=set&v=" + _Info.AppVersion, _GetGVPostContent());
+            var content = (await ret.Content.ReadAsStringAsync()).Split('\n')[1];
+
+            var feed = JsonConvert.DeserializeObject<JsonModels.SettingsFeed>(content);
+
+            var x = 1;
+
         }
     }
 }

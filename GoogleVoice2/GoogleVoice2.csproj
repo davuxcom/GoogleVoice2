@@ -35,6 +35,7 @@
   <ItemGroup>
     <Compile Include="Account.cs" />
     <Compile Include="Extensions.cs" />
+    <Compile Include="JsonModels\SettingsFeed.cs" />
     <Compile Include="Phone.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
