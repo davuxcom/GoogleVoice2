@@ -11,47 +11,66 @@ namespace GoogleVoice2
 {
     public class Account
     {
+        public class StoredAccountDetails
+        {
+            public string GVX { get; set; }
+            public string RNR_SE { get; set; }
+            public int AppVersion { get; set; }
+
+            public bool IsValid()
+            {
+                return (!string.IsNullOrWhiteSpace(GVX) && !string.IsNullOrWhiteSpace(RNR_SE));
+            }
+        }
+
+        CookieContainer _Jar = new CookieContainer();
+
         string _UserName;
         string _Password; // TODO: SecureString
-        string _GVX;
-        string _RNR_SE;
-        int _AppVersion;
+        public StoredAccountDetails _Info; // public for testability
 
         public Account(string UserName, string Password)
         {
             _UserName = UserName;
             _Password = Password;
 
-            DefaultHandlerRedirect = new HttpClientHandler();
-            DefaultHandlerRedirect.UseDefaultCredentials = true;
-            DefaultHandlerRedirect.AllowAutoRedirect = true;
-            DefaultHandlerRedirect.UseCookies = true;
-            DefaultHandlerRedirect.CookieContainer = Jar;
+            _Info = new StoredAccountDetails();
         }
 
-        CookieContainer Jar = new CookieContainer();
-        HttpClientHandler DefaultHandlerRedirect = null;
+        public Account(StoredAccountDetails Info)
+        {
+            _Info = Info;
+        }
+
+        HttpClient _GetClient()
+        {
+            var http = new HttpClient(new HttpClientHandler {
+                UseDefaultCredentials = true,
+                AllowAutoRedirect = true,
+                UseCookies = true,
+                CookieContainer = _Jar,
+            });
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (iPhone; U; CPU iPhone OS 7_0 like Mac OS X; en-us) AppleWebKit/532.9 (KHTML, like Gecko) Version/6.0.5 Mobile/8A293 Safari/6531.22.7");
+            http.MaxResponseContentBufferSize = int.MaxValue;
+            return http;
+        }
 
         public async Task Login()
         {
-            HttpClient http = new HttpClient(DefaultHandlerRedirect);
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (iPhone; U; CPU iPhone OS 7_0 like Mac OS X; en-us) AppleWebKit/532.9 (KHTML, like Gecko) Version/6.0.5 Mobile/8A293 Safari/6531.22.7");
-            http.MaxResponseContentBufferSize = int.MaxValue;
-
+            var http = _GetClient();
             var ret = await http.GetAsync("https://www.google.com/voice/m");
             if (ret.RequestMessage.RequestUri.LocalPath != "/ServiceLogin")
             {
                 throw new GVLoginException("Failed to reach ServiceLogin.");
             }
 
-            var GALX = Jar.FindCookieByName("https://accounts.google.com/", "GALX");
+            var GALX = _Jar.FindCookieByName("https://accounts.google.com/", "GALX");
             if (string.IsNullOrEmpty(GALX))
             {
                 throw new GVLoginException("Failed to find GALX cookie.");
             }
 
-            ret = await http.PostAsync(
-                "https://accounts.google.com/ServiceLoginAuth?service=grandcentral", 
+            ret = await http.PostAsync("https://accounts.google.com/ServiceLoginAuth?service=grandcentral", 
                 new FormUrlEncodedContent(new Dictionary<string, string> {
                             {"ltmpl" , "mobile"},   // Probably don't need one of these
                             {"btmpl" , "mobile"},
@@ -68,7 +87,7 @@ namespace GoogleVoice2
             if (ret.RequestMessage.RequestUri.ToString() == "https://www.google.com/voice/m")
             {
                 // we're logged in!
-                _GVX = Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
+                _Info.GVX = _Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
             }
             else if (ret.RequestMessage.RequestUri.ToString().StartsWith("https://accounts.google.com/SmsAuth"))
             {
@@ -85,7 +104,7 @@ namespace GoogleVoice2
                     // NOTE:  this page has URLs that must be HtmlDecoded!
                     var uri = System.Net.WebUtility.HtmlDecode(m.Groups[1].Value);
                     ret = await http.GetAsync("https://www.google.com/voice/m");
-                    _GVX = Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
+                    _Info.GVX = _Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
                 }
                 else
                 {
@@ -93,7 +112,7 @@ namespace GoogleVoice2
                 }
             }
 
-            if (string.IsNullOrEmpty(_GVX))
+            if (string.IsNullOrEmpty(_Info.GVX))
             {
                 throw new GVLoginException("GVX is missing after redirect");
             }
@@ -102,7 +121,7 @@ namespace GoogleVoice2
             var m2 = Regex.Match(Page, @"appVersion: (.\d*)", RegexOptions.Singleline);
             if (m2.Success)
             {
-                _AppVersion = int.Parse(m2.Groups[1].Value);
+                _Info.AppVersion = int.Parse(m2.Groups[1].Value);
             }
 
             // We're going to fetch the lite mobile page, and pull out an RNR_SE, so we can make calls
@@ -115,10 +134,10 @@ namespace GoogleVoice2
             {
                 // NOTE: we won't encode here, because Post'ing will encode it.
                 // but this value MUST be encoded before going out!
-                _RNR_SE = rnr.Groups[1].Value;
+                _Info.RNR_SE = rnr.Groups[1].Value;
             }
 
-            if (string.IsNullOrWhiteSpace(_GVX) || string.IsNullOrWhiteSpace(_RNR_SE))
+            if (!_Info.IsValid())
             {
                 throw new GVLoginException("Couldn't find login tokens.");
             }
