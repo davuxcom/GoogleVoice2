@@ -20,23 +20,30 @@ namespace GoogleVoice2
         {
             _UserName = UserName;
             _Password = Password;
+
+            DefaultHandlerRedirect = new HttpClientHandler();
+            DefaultHandlerRedirect.UseDefaultCredentials = true;
+            DefaultHandlerRedirect.AllowAutoRedirect = true;
+            DefaultHandlerRedirect.UseCookies = true;
+            DefaultHandlerRedirect.CookieContainer = Jar;
         }
+
+        CookieContainer Jar = new CookieContainer();
+        HttpClientHandler DefaultHandlerRedirect = null;
 
         public async Task Login()
         {
-            var cc = new CookieContainer();
-            var handler = new HttpClientHandler{CookieContainer = cc};
-            handler.AllowAutoRedirect = true;
+            HttpClient http = new HttpClient(DefaultHandlerRedirect);
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (iPhone; U; CPU iPhone OS 7_0 like Mac OS X; en-us) AppleWebKit/532.9 (KHTML, like Gecko) Version/6.0.5 Mobile/8A293 Safari/6531.22.7");
+            http.MaxResponseContentBufferSize = int.MaxValue;
 
-            HttpClient http = new HttpClient(handler);
             var ret = await http.GetAsync("https://www.google.com/voice/m");
-
             if (ret.RequestMessage.RequestUri.LocalPath != "/ServiceLogin")
             {
                 throw new GVLoginException("Failed to reach ServiceLogin.");
             }
 
-            var GALX = cc.FindCookieByName("https://accounts.google.com/", "GALX");
+            var GALX = Jar.FindCookieByName("https://accounts.google.com/", "GALX");
             if (string.IsNullOrEmpty(GALX))
             {
                 throw new GVLoginException("Failed to find GALX cookie.");
@@ -59,9 +66,8 @@ namespace GoogleVoice2
 
             if (ret.RequestMessage.RequestUri.ToString() == "https://www.google.com/voice/m")
             {
-                var Page = await ret.Content.ReadAsStringAsync();
                 // we're logged in!
-                _GVX = cc.FindCookieByName("https://www.google.com/voice/m", "gvx");
+                _GVX = Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
             }
             else if (ret.RequestMessage.RequestUri.ToString().StartsWith("https://accounts.google.com/SmsAuth"))
             {
@@ -78,7 +84,7 @@ namespace GoogleVoice2
                     // NOTE:  this page has URLs that must be HtmlDecoded!
                     var uri = System.Net.WebUtility.HtmlDecode(m.Groups[1].Value);
                     ret = await http.GetAsync("https://www.google.com/voice/m");
-                    _GVX = cc.FindCookieByName("https://www.google.com/voice/m", "gvx");
+                    _GVX = Jar.FindCookieByName("https://www.google.com/voice/m", "gvx");
                 }
                 else
                 {
